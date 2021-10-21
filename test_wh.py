@@ -39,48 +39,37 @@ def write_results_to_file(run_name, image_auc, pixel_auc, image_ap, pixel_ap):
         file.write(fin_str)
 
 
-def write_results_to_file(args, anomaly_score_gt, anomaly_score_prediction, img_pathes):
-    f1 = opne(args.save_file, 'w')
+def write_results_to_file_wh(args, anomaly_score_gt, anomaly_score_prediction, img_pathes):
+    f1 = open(args.save_file, 'w')
     for i in range(len(anomaly_score_prediction)):
-        img_path = img_pathes[i]
+        img_path = img_pathes[i][0]
         label = int(anomaly_score_gt[i])
         score = float(anomaly_score_prediction[i])
-        f1.write(img_path + ' ' + str(label) + str(score) + '\n')
+        f1.write(img_path + ' ' + str(label) +' ' + str(score) + '\n')
 
 
 
 
 def test(args):
-    obj_ap_pixel_list = []
-    obj_auroc_pixel_list = []
-    obj_ap_image_list = []
-    obj_auroc_image_list = []
-
     img_dim = 256
-    # run_name = base_model_name+"_"+obj_name+'_'
-    #run_name = args.test_name + str(args.lr) + '_' + str(args.epochs) + '_bs' + str(args.bs)
     run_name = args.test_name
 
     model = ReconstructiveSubNetwork(in_channels=3, out_channels=3)
-    #model.load_state_dict(torch.load(os.path.join(checkpoint_path,run_name+".pckl"), map_location='cuda:0'))
     model.load_state_dict(torch.load(args.rec_checkpoint))#, map_location='cuda:0')
     model.cuda()
     model.eval()
 
     model_seg = DiscriminativeSubNetwork(in_channels=6, out_channels=2)
-    #model_seg.load_state_dict(torch.load(os.path.join(checkpoint_path, run_name+"_seg.pckl"), map_location='cuda:0'))
     model_seg.load_state_dict(torch.load(args.seg_checkpoint))#, map_location='cuda:0')
     model_seg.cuda()
     model_seg.eval()
 
-    #dataset = MVTecDRAEMTestDataset(mvtec_path + obj_name + "/test/", resize_shape=[img_dim, img_dim])
     dataset = Mydatatest(args.test_list, resize_shape=[img_dim, img_dim])
     dataloader = DataLoader(dataset, batch_size=1,
                             shuffle=False, num_workers=0)
 
     total_pixel_scores = np.zeros((img_dim * img_dim * len(dataset)))
     total_gt_pixel_scores = np.zeros((img_dim * img_dim * len(dataset)))
-    # mask_cnt = 0
 
     anomaly_score_gt = []
     anomaly_score_prediction = []
@@ -93,13 +82,12 @@ def test(args):
     # cnt_display = 0
     display_indices = np.random.randint(len(dataloader), size=(16,))
 
-
     for i_batch, sample_batched in enumerate(dataloader):
 
         gray_batch = sample_batched["image"].cuda()
         img_path = sample_batched['image_path']
 
-        is_normal = sample_batched["has_anomaly"].detach().numpy()[0 ,0]
+        is_normal = sample_batched["has_anomaly"].detach().numpy()[0, 0]
         anomaly_score_gt.append(is_normal)
         #true_mask = sample_batched["mask"]
         #true_mask_cv = true_mask.detach().numpy()[0, :, :, :].transpose((1, 2, 0))
@@ -110,16 +98,6 @@ def test(args):
         out_mask = model_seg(joined_in)
         out_mask_sm = torch.softmax(out_mask, dim=1)
 
-
-        # if i_batch in display_indices:
-        #     t_mask = out_mask_sm[:, 1:, :, :]
-        #     display_images[cnt_display] = gray_rec[0]
-        #     display_gt_images[cnt_display] = gray_batch[0]
-        #     display_out_masks[cnt_display] = t_mask[0]
-        #     display_in_masks[cnt_display] = true_mask[0]
-        #     cnt_display += 1
-
-
         #out_mask_cv = out_mask_sm[0 ,1 ,: ,:].detach().cpu().numpy()
 
         out_mask_averaged = torch.nn.functional.avg_pool2d(out_mask_sm[: ,1: ,: ,:], 21, stride=1,
@@ -129,53 +107,17 @@ def test(args):
         anomaly_score_prediction.append(image_score)
         img_pathes.append(img_path)
 
-        # flat_true_mask = true_mask_cv.flatten()
-        # flat_out_mask = out_mask_cv.flatten()
-        #import pdb;pdb.set_trace()
-        # total_pixel_scores[mask_cnt * img_dim * img_dim:(mask_cnt + 1) * img_dim * img_dim] = flat_out_mask
-        # total_gt_pixel_scores[mask_cnt * img_dim * img_dim:(mask_cnt + 1) * img_dim * img_dim] = flat_true_mask
-        # mask_cnt += 1
 
     anomaly_score_prediction = np.array(anomaly_score_prediction)
     anomaly_score_gt = np.array(anomaly_score_gt)
 
-    #auroc = roc_auc_score(anomaly_score_gt, anomaly_score_prediction)
-    #ap = average_precision_score(anomaly_score_gt, anomaly_score_prediction)
-
-    #total_gt_pixel_scores = total_gt_pixel_scores.astype(np.uint8)
-    #total_gt_pixel_scores = total_gt_pixel_scores[:img_dim * img_dim * mask_cnt]
-    #total_pixel_scores = total_pixel_scores[:img_dim * img_dim * mask_cnt]
-    #auroc_pixel = roc_auc_score(total_gt_pixel_scores, total_pixel_scores)
-    #ap_pixel = average_precision_score(total_gt_pixel_scores, total_pixel_scores)
-    #obj_ap_pixel_list.append(ap_pixel)
-    #obj_auroc_pixel_list.append(auroc_pixel)
-    #obj_auroc_image_list.append(auroc)
-    #obj_ap_image_list.append(ap)
-    # print(obj_name)
-    # print("AUC Image:  " +str(auroc))
-    # print("AP Image:  " +str(ap))
-    # print("AUC Pixel:  " +str(auroc_pixel))
-    # print("AP Pixel:  " +str(ap_pixel))
-    # print("==============================")
-    #
-    # print(run_name)
-    # print("AUC Image mean:  " + str(np.mean(obj_auroc_image_list)))
-    # print("AP Image mean:  " + str(np.mean(obj_ap_image_list)))
-    # print("AUC Pixel mean:  " + str(np.mean(obj_auroc_pixel_list)))
-    # print("AP Pixel mean:  " + str(np.mean(obj_ap_pixel_list)))
     write_results_to_file_wh(args, anomaly_score_gt, anomaly_score_prediction, img_pathes)
-
-
-    #write_results_to_file(run_name, obj_auroc_image_list, obj_auroc_pixel_list, obj_ap_image_list, obj_ap_pixel_list)
 
 if __name__=="__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--gpu_id', action='store', type=int, required=True)
-    #parser.add_argument('--base_model_name', action='store', type=str, required=True)
-    #parser.add_argument('--data_path', action='store', type=str, required=True)
-    #parser.add_argument('--checkpoint_path', action='store', type=str, required=True)
     parser.add_argument('--test_list', type=str, required=True)
     parser.add_argument('--rec_checkpoint', type=str, required=True)
     parser.add_argument('--seg_checkpoint', type=str, required=True)

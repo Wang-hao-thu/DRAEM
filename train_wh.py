@@ -28,6 +28,9 @@ def train_on_device(args):
     if not os.path.exists(args.log_path):
         os.makedirs(args.log_path)
 
+    save_checkpoint = os.path.join(args.checkpoint_path, args.train_name)
+    os.makedirs(save_checkpoint, exist_ok=True)
+
     run_name = args.train_name + str(args.lr) + '_' + str(args.epochs) + '_bs' + str(args.bs)
     model = ReconstructiveSubNetwork(in_channels=3, out_channels=3)
     model.cuda()
@@ -59,10 +62,11 @@ def train_on_device(args):
     for epoch in range(args.epochs):
         print("Epoch: "+str(epoch))
         for i_batch, sample_batched in enumerate(dataloader):
+
             gray_batch = sample_batched["image"].cuda()
             aug_gray_batch = sample_batched["augmented_image"].cuda()
             anomaly_mask = sample_batched["anomaly_mask"].cuda()
-
+            #import pdb;pdb.set_trace()
             gray_rec = model(aug_gray_batch)
             joined_in = torch.cat((gray_rec, aug_gray_batch), dim=1)
 
@@ -94,15 +98,16 @@ def train_on_device(args):
                 visualizer.visualize_image_batch(anomaly_mask, n_iter, image_name='mask_target')
                 visualizer.visualize_image_batch(t_mask, n_iter, image_name='mask_out')
 
-
             n_iter +=1
-
-        print(f'l2loss{l2_loss}   ssim_loss{ssim_loss}   segment_loss{segment_loss}')
-
         scheduler.step()
+        if epoch % 20 == 1:
 
-        torch.save(model.state_dict(), os.path.join(args.checkpoint_path, run_name)+'.pth')
-        torch.save(model_seg.state_dict(), os.path.join(args.checkpoint_path, run_name)+'_seg.pth')
+            print(f'l2loss{l2_loss}   ssim_loss{ssim_loss}   segment_loss{segment_loss}')
+
+
+
+            torch.save(model.state_dict(), os.path.join(save_checkpoint, run_name + str(epoch)+'.pth'))
+            torch.save(model_seg.state_dict(), os.path.join(save_checkpoint, run_name + str(epoch)+'_seg.pth'))
 
         #torch.save(model.state_dict(), os.path.join(args.checkpoint_path, run_name+".pckl"))
         #torch.save(model_seg.state_dict(), os.path.join(args.checkpoint_path, run_name+"_seg.pckl"))
@@ -124,6 +129,7 @@ if __name__=="__main__":
     parser.add_argument('--visualize', action='store_true')
     parser.add_argument('--train_list', type=str, required=True)
     parser.add_argument('--anomaly_list', type=str, required=True)
+    parser.add_argument('--test_list', type=str, required=True)
 
     args = parser.parse_args()
     #
